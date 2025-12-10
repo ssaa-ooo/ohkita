@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>宿泊予約カレンダー</title>
+  <title>宿泊予約</title>
   <style>
     body {
       font-family: -apple-system, sans-serif;
@@ -19,31 +19,42 @@
       max-width: 450px;
     }
 
-    /* カレンダーのデザイン */
+    /* カレンダー周り */
     .calendar-wrapper {
-      margin-bottom: 30px;
+      margin-bottom: 20px;
       background: #fff;
       padding: 15px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .calendar-header {
-      text-align: center;
-      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .month-label {
       font-weight: bold;
       font-size: 1.1em;
     }
+    .nav-btn {
+      background: #eee;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .nav-btn:hover { background: #ddd; }
+
     .calendar-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 5px;
       text-align: center;
     }
-    .day-name {
-      font-size: 0.8em;
-      color: #888;
-      padding-bottom: 5px;
-    }
+    .day-name { font-size: 0.8em; color: #888; padding-bottom: 5px; }
+    
     .day {
       padding: 8px 0;
       font-size: 0.9em;
@@ -51,34 +62,43 @@
       border-radius: 4px;
       background-color: #f7f7f5;
     }
-    .day:hover {
-      background-color: #e0e0e0;
-    }
+    .day:hover { background-color: #e0e0e0; }
     
-    /* 満室（予約済み）のスタイル */
+    /* 満室 */
     .day.full {
-      background-color: #ffcccc; /* 赤背景 */
+      background-color: #ffcccc;
       color: #cc0000;
       cursor: not-allowed;
       text-decoration: line-through;
+      pointer-events: none;
     }
     
-    /* 選択中のスタイル */
+    /* 選択中 */
     .day.selected {
       background-color: #333;
       color: white;
     }
-
-    /* 空白の日（月またぎ） */
-    .day.empty {
-      background-color: transparent;
-      cursor: default;
-    }
+    .day.empty { background-color: transparent; cursor: default; pointer-events: none; }
 
     /* フォーム周り */
-    label { font-weight: 600; font-size: 14px; display: block; margin-top: 15px; }
-    input { width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
-    button { margin-top: 20px; width: 100%; padding: 12px; background-color: #333; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+    label { font-weight: 600; font-size: 13px; display: block; margin-top: 15px; margin-bottom: 5px; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 16px; box-sizing: border-box; background-color: white;}
+    
+    /* 日付入力欄を横並びにするレイアウト */
+    .date-row { display: flex; gap: 10px; }
+    .date-col { flex: 1; }
+
+    button[type="submit"] {
+      margin-top: 25px;
+      width: 100%;
+      padding: 12px;
+      background-color: #333;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+    }
     button:disabled { background-color: #ccc; }
     .message { margin-top: 15px; text-align: center; font-size: 14px; }
   </style>
@@ -87,17 +107,38 @@
 
   <div class="container">
     <div class="calendar-wrapper">
-      <div id="calendar-title" class="calendar-header">Loading...</div>
+      <div class="calendar-header">
+        <button class="nav-btn" onclick="changeMonth(-1)">＜</button>
+        <div id="calendar-title" class="month-label">Loading...</div>
+        <button class="nav-btn" onclick="changeMonth(1)">＞</button>
+      </div>
       <div id="calendar-grid" class="calendar-grid"></div>
     </div>
 
     <form id="bookingForm">
-      <label>宿泊希望日（上のカレンダーから選択）</label>
-      <input type="date" id="date" required readonly> <label>お名前</label>
+      
+      <div class="date-row">
+        <div class="date-col">
+          <label>チェックイン</label>
+          <input type="date" id="checkin" required>
+        </div>
+        <div class="date-col">
+          <label>チェックアウト</label>
+          <input type="date" id="checkout" required>
+        </div>
+      </div>
+
+      <label>お名前</label>
       <input type="text" id="name" required placeholder="山田 太郎">
 
       <label>メールアドレス</label>
       <input type="email" id="email" required placeholder="sample@example.com">
+
+      <label>宿泊人数</label>
+      <select id="guests">
+        <option value="1">1名</option>
+        <option value="2">2名</option>
+      </select>
 
       <button type="submit" id="submitBtn">予約を申し込む</button>
       <div id="msg" class="message"></div>
@@ -105,104 +146,121 @@
   </div>
 
   <script>
-    // ★ GASのURLをここに貼り付け
+    // ★ GASのウェブアプリURLをここに貼り付けてください
     const GAS_URL = "https://script.google.com/macros/s/AKfycbxEAyH8M7lsEuUO5HPpTqyzUbfiiYFzlsiWuVWF6FPT9OHZvZYO2ZCZNIKscI-oLTnUrA/exec";
 
-    let busyDates = []; // 予約済みリスト
-    const today = new Date();
-    let currentYear = today.getFullYear();
-    let currentMonth = today.getMonth(); // 0始まり
+    let busyDates = [];
+    let displayDate = new Date(); // 表示中の年月
 
-    // 初期化処理
     window.onload = async function() {
+      // ページ読み込み時に1年分の予約データを取得
       await fetchBusyDates();
-      renderCalendar(currentYear, currentMonth);
+      renderCalendar();
     };
 
-    // GASから予約済みの日付を取得
+    // 月移動ボタンの処理
+    function changeMonth(step) {
+      displayDate.setMonth(displayDate.getMonth() + step);
+      renderCalendar();
+    }
+
+    // 予約データの取得
     async function fetchBusyDates() {
       try {
-        const res = await fetch(GAS_URL + '?type=json', { redirect: "follow" }); // GETリクエスト
-        const data = await res.json();
-        busyDates = data; // ["2023-12-01", "2023-12-05"...]
+        const res = await fetch(GAS_URL + '?type=json', { redirect: "follow" });
+        busyDates = await res.json();
       } catch (e) {
-        console.error("カレンダー取得エラー", e);
+        console.error("データ取得エラー", e);
       }
     }
 
     // カレンダー描画
-    function renderCalendar(year, month) {
+    function renderCalendar() {
       const grid = document.getElementById('calendar-grid');
       const title = document.getElementById('calendar-title');
       grid.innerHTML = "";
       
-      // タイトル更新
+      const year = displayDate.getFullYear();
+      const month = displayDate.getMonth();
+
       title.textContent = `${year}年 ${month + 1}月`;
 
-      // 曜日の表示
-      const days = ['日', '月', '火', '水', '木', '金', '土'];
-      days.forEach(d => {
+      // 曜日ヘッダー
+      ['日', '月', '火', '水', '木', '金', '土'].forEach(d => {
         const div = document.createElement('div');
         div.className = 'day-name';
         div.textContent = d;
         grid.appendChild(div);
       });
 
-      // 月の初日の曜日と、日数を計算
       const firstDay = new Date(year, month, 1).getDay();
       const lastDate = new Date(year, month + 1, 0).getDate();
 
-      // 空白セルを作成（1日が始まる前の空白）
+      // 空白セル
       for (let i = 0; i < firstDay; i++) {
         const div = document.createElement('div');
         div.className = 'day empty';
         grid.appendChild(div);
       }
 
-      // 日付セルを作成
+      // 日付セル
       for (let d = 1; d <= lastDate; d++) {
         const div = document.createElement('div');
         div.className = 'day';
         div.textContent = d;
 
-        // 日付文字列を作成 (YYYY-MM-DD)
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-        // 満室チェック
         if (busyDates.includes(dateStr)) {
           div.classList.add('full');
           div.title = "満室";
         } else {
-          // 空室の場合のクリックイベント
           div.onclick = () => selectDate(dateStr, div);
         }
-
         grid.appendChild(div);
       }
     }
 
-    // 日付選択時の処理
+    // カレンダーの日付クリック時の処理
     function selectDate(dateStr, element) {
-      // フォームに入力
-      document.getElementById('date').value = dateStr;
-      
-      // 選択状態の見た目を更新
+      // 1. チェックイン日に選択した日付を入れる
+      document.getElementById('checkin').value = dateStr;
+
+      // 2. チェックアウト日に「翌日」を自動入力する
+      const nextDay = new Date(dateStr);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDayStr = nextDay.toISOString().split('T')[0];
+      document.getElementById('checkout').value = nextDayStr;
+
+      // 3. 見た目の選択状態を更新
       document.querySelectorAll('.day').forEach(d => d.classList.remove('selected'));
       element.classList.add('selected');
     }
 
-    // 予約送信処理（前回と同じ）
+    // 送信処理
     document.getElementById('bookingForm').addEventListener('submit', function(e) {
       e.preventDefault();
+      
+      // バリデーション: チェックアウトがチェックインより前だとエラー
+      const checkinVal = document.getElementById('checkin').value;
+      const checkoutVal = document.getElementById('checkout').value;
+      if(checkinVal >= checkoutVal){
+        alert("チェックアウト日はチェックイン日より後の日付にしてください。");
+        return;
+      }
+
       const btn = document.getElementById('submitBtn');
       const msg = document.getElementById('msg');
       btn.disabled = true;
       btn.textContent = "送信中...";
+      msg.textContent = "";
 
       const payload = {
         name: document.getElementById('name').value,
         email: document.getElementById('email').value,
-        date: document.getElementById('date').value
+        guests: document.getElementById('guests').value,
+        checkin: checkinVal,
+        checkout: checkoutVal
       };
 
       fetch(GAS_URL, {
@@ -214,18 +272,21 @@
       .then(res => res.json())
       .then(data => {
         if(data.result === 'success'){
-          msg.textContent = "予約完了！カレンダーを更新します...";
+          msg.textContent = "予約申し込みが完了しました！";
           msg.style.color = "green";
           document.getElementById('bookingForm').reset();
-          // 送信後に最新の予約状況を再取得
-          setTimeout(() => { location.reload(); }, 2000); 
+          // 少し待ってリロード
+          setTimeout(() => { location.reload(); }, 2000);
         } else {
-          throw new Error('Err');
+          throw new Error('GAS Error');
         }
       })
       .catch(err => {
-        msg.textContent = "送信失敗";
+        console.error(err);
+        msg.textContent = "送信に失敗しました。";
+        msg.style.color = "red";
         btn.disabled = false;
+        btn.textContent = "予約を申し込む";
       });
     });
   </script>
